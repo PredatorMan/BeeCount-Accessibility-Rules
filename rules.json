@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "rulesVersion": 2,
+  "rulesVersion": 3,
   "apps": [
     {
       "id": "wechat",
@@ -119,11 +119,12 @@
           "id": "alipay_bill_detail_expense_v2",
           "transactionType": "expense",
           "requiredAnchors": ["账单详情"],
-          "anyAnchors": ["支付成功", "付款成功", "交易成功"],
+          "anyAnchors": ["支付成功", "付款成功", "交易成功", "扣款成功"],
           "excludedAnchors": [],
           "amount": {
             "labels": ["金额", "支付金额", "付款金额", "交易金额"],
             "regexes": [
+              "^[-−]\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)$",
               "^支出\\s*[¥￥]?\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)\\s*元?$",
               "[¥￥]\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)",
               "([0-9]{1,7}(?:\\.[0-9]{1,2})?)\\s*元"
