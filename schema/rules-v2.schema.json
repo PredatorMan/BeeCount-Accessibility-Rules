@@ -90,6 +90,10 @@
         "activityIncludes": {
           "$ref": "#/$defs/nullableTextList"
         },
+        "pageCandidateAnchors": {
+          "$ref": "#/$defs/nullableTextList",
+          "description": "Lightweight anchors indicating that a slowly loading page may still be a bill page. They never trigger recognition by themselves."
+        },
         "rules": {
           "type": "array",
           "minItems": 1,

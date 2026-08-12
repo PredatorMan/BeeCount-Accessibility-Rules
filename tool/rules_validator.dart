@@ -89,6 +89,7 @@ class RulesValidator {
           'displayName',
           'defaultEnabled',
           'activityIncludes',
+          'pageCandidateAnchors',
           'rules',
         },
         path);
@@ -111,6 +112,7 @@ class RulesValidator {
       );
     }
     _stringList(app, 'activityIncludes', path);
+    _stringList(app, 'pageCandidateAnchors', path);
     final rules = _list(app, 'rules', path);
     if (rules.isEmpty || rules.length > _maxRulesPerApp) {
       _fail('$path.rules', 'must contain 1..$_maxRulesPerApp items');

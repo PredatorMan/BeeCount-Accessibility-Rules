@@ -7,16 +7,30 @@
 ## 仓库结构
 
 ```text
-rules.json                         BeeCount 实际下载的唯一发布文件
+manifest.json                      规则版本与 App 总索引，决定发布顺序
+apps/wechat.json                   微信的独立源规则
+apps/alipay.json                   支付宝的独立源规则
+rules.json                         确定性生成的发布产物，BeeCount 实际下载
 schema/rules-v2.schema.json        Android 运行时 Schema v2 的静态结构约束
 schema/ai-analysis.schema.json     AI 快照分析结果格式
 prompts/analyze-gkd-snapshot.md    固定的 AI 分析提示词
+tool/build_rules.dart              合并 App 源规则并检查发布产物漂移
+tool/validate_rules.dart           校验合并后的运行时规则
 tool/import_snapshot.dart          导入并脱敏 GKD ZIP
 tool/sanitize_snapshot.dart        单独脱敏 JSON 的辅助工具
 snapshots-local/                   本地分析工作区，已被 Git 忽略
 ```
 
-`rules.json` 是发布源，不要手工维护另一份可产生分歧的规则副本。
+`manifest.json` 和 `apps/*.json` 是需要人工维护的源文件。`rules.json` 是兼容 BeeCount 固定下载地址的构建产物，禁止直接手工修改。构建器严格按 `manifest.json` 的顺序合并，因此不同机器会得到完全相同的 UTF-8 JSON；CI 会拒绝源文件和发布产物不一致的提交。
+
+## 当前适配 App
+
+| App | 包名 | 源规则 | 默认状态 |
+| --- | --- | --- | --- |
+| 微信 | `com.tencent.mm` | `apps/wechat.json` | 开启 |
+| 支付宝 | `com.eg.android.AlipayGphone` | `apps/alipay.json` | 开启 |
+
+这个表用于快速了解线上能力，实际可下载内容以 `manifest.json`、`apps/*.json` 合并后的 `rules.json` 为准。当前没有淘宝正向规则。
 
 ## 完整适配流程
 
@@ -120,13 +134,18 @@ AI 输出是候选材料，不是已验证规则。AI 不能替代真机验证�
 
 ### 6. 添加 App 和页面规则
 
-打开根目录的 `rules.json`：
+不要编辑根目录的 `rules.json`。每个 App 只维护一个独立源文件：
 
-- 已存在 App：把审核后的页面规则加入对应 App 的 `rules` 数组；
-- 新 App：新增完整 App 对象，并将 `defaultEnabled` 明确设为 `false`，让用户更新后自行开启；
+- 已存在 App：打开 `apps/<app-id>.json`，把审核后的页面规则加入它的 `rules` 数组；
+- 新 App：新建 `apps/<app-id>.json`，内容是一个完整 App 对象，并将 `defaultEnabled` 明确设为 `false`；
+- 把新 App 加入 `manifest.json` 的 `apps` 数组，`id` 必须和源文件里的 App `id` 相同，`source` 使用直接路径 `apps/<app-id>.json`；
+- 按希望在 BeeCount 中展示的顺序排列 `manifest.json` 条目；构建器按此顺序生成发布文件；
 - `packageName` 必须唯一，App `id` 必须唯一，同一 App 内页面规则 `id` 必须唯一；
 - `activityIncludes` 为空表示不限制 Activity；设置后使用的是大小写不敏感的“包含”判断，应避免写过短的片段；
+- `pageCandidateAnchors` 用于慢加载三态判断：出现任一候选锚点但完整交易规则尚未匹配时，BeeCount 返回 `UNKNOWN` 并继续监测；候选锚点本身绝不会触发弹窗；
 - 每个 App 最多 20 条页面规则，整个文件最多 50 个 App。
+
+构建器会拒绝重复索引、越过 `apps/` 的路径、索引 ID 与文件 ID 不一致，以及存在于 `apps/` 但未登记到清单的 JSON，避免规则静默漏发。
 
 新 App 元数据片段如下。发布对象还必须包含至少一条已经审核的 `rules` 页面规则：
 
@@ -136,12 +155,14 @@ AI 输出是候选材料，不是已验证规则。AI 不能替代真机验证�
   "packageName": "com.example.pay",
   "displayName": "示例支付",
   "defaultEnabled": false,
-  "activityIncludes": ["PaymentResultActivity"]
+  "activityIncludes": ["PaymentResultActivity"],
+  "pageCandidateAnchors": ["账单详情", "交易详情"]
 }
 ```
 
 页面规则的核心能力：
 
+- App 级 `pageCandidateAnchors`：标记可能仍在加载的账单页，只影响 `UNKNOWN`/`NON_BILL_PAGE` 分类，不会直接记账；
 - `requiredAnchors`：每一项都必须在交易容器文本中出现；
 - `anyAnchors`：至少一项必须出现；
 - `excludedAnchors`：任一项出现即拒绝；
@@ -155,24 +176,28 @@ AI 输出是候选材料，不是已验证规则。AI 不能替代真机验证�
 
 ### 7. 校验和测试
 
-先运行规则仓库的静态分析与测试：
+修改分文件后，先重新生成发布产物，再运行静态分析与测试：
 
 ```powershell
+dart run tool/build_rules.dart
 dart analyze
 dart test
 ```
 
-然后运行仓库提供的规则校验命令：
+最后检查发布产物没有漂移，并运行规则校验：
 
 ```powershell
+dart run tool/build_rules.dart --check
 dart run tool/validate_rules.dart rules.json
 ```
+
+`--check` 不写文件，只比较当前 `rules.json` 和源规则应生成的内容，适合 CI。若失败，应运行不带 `--check` 的构建命令并检查生成差异，而不是直接修改 `rules.json`。
 
 `schema/rules-v2.schema.json` 描述静态格式；最终权威仍是 BeeCount Android 的 `RecognitionRuleCodec` 和 `PaymentRecognitionEngine`。JSON Schema 无法独立保证重复 App/规则 ID、正则安全限制、容器实际唯一和页面行为正确，因此发布前还必须在 BeeCount 仓库运行 Android 规则解析/识别测试，并在真机对正向与负向页面回归。
 
 ### 8. 递增规则版本
 
-所有发布内容验证完成后，把根级 `rulesVersion` 增加到一个比线上版本更大的正整数。不要复用或降低版本号。
+所有发布内容验证完成后，把 `manifest.json` 的 `rulesVersion` 增加到一个比线上版本更大的正整数，然后重新运行 `dart run tool/build_rules.dart`。不要复用或降低版本号，也不要直接修改生成文件中的版本。
 
 BeeCount 只接受比设备当前活动规则更新的版本；同版本但内容不同不会作为更新安装。`schemaVersion` 当前固定为 `2`。新增 v2 范围内的 App/页面不需要新 APK；只有引入运行时不支持的新字段或新行为时，才需要先升级 BeeCount APK 和 Schema。
 
@@ -181,6 +206,8 @@ BeeCount 只接受比设备当前活动规则更新的版本；同版本但内�
 发布前最后确认：
 
 - `rules.json` 是有效 UTF-8 JSON，大小不超过 512 KiB；
+- `manifest.json` 中每个 App 都有且只有一个对应的 `apps/*.json`；
+- `dart run tool/build_rules.dart --check` 通过，发布产物没有漂移；
 - `schemaVersion` 为 `2`，`rulesVersion` 已递增；
 - 新 App 的 `defaultEnabled` 为 `false`；
 - 正向、相似页和负向页测试都通过；

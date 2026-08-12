@@ -18,4 +18,5 @@ jobs:
       - run: dart format --output=none --set-exit-if-changed tool test
       - run: dart analyze
       - run: dart test
+      - run: dart run tool/build_rules.dart --check
       - run: dart run tool/validate_rules.dart rules.json
