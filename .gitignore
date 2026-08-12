@@ -1,0 +1,6 @@
+.dart_tool/
+.packages
+# GKD snapshots can contain account, order, address, and payment data.
+snapshots-local/
+workspace/
+*.gkd-workspace/

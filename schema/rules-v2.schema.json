@@ -1,0 +1,466 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/PredatorMan/BeeCount-Accessibility-Rules/schema/rules-v2.schema.json",
+  "title": "BeeCount Accessibility Recognition Rules v2",
+  "description": "BeeCount Android RecognitionRuleCodec 支持的 v2 规则发布格式。",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schemaVersion", "rulesVersion", "apps"],
+  "properties": {
+    "schemaVersion": {
+      "const": 2,
+      "type": "integer",
+      "maximum": 2147483647
+    },
+    "rulesVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2147483647
+    },
+    "apps": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 50,
+      "items": {
+        "$ref": "#/$defs/appRule"
+      }
+    }
+  },
+  "$defs": {
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "\\S"
+    },
+    "textList": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "$ref": "#/$defs/text"
+      }
+    },
+    "nullableTextList": {
+      "oneOf": [
+        { "$ref": "#/$defs/textList" },
+        { "type": "null" }
+      ]
+    },
+    "regex": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "pattern": "\\S",
+      "$comment": "RecognitionRuleCodec additionally rejects invalid regex syntax, empty matches, lookarounds/flags/special groups, back references, and unbounded quantified groups."
+    },
+    "regexList": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "$ref": "#/$defs/regex"
+      }
+    },
+    "nullableRegexList": {
+      "oneOf": [
+        { "$ref": "#/$defs/regexList" },
+        { "type": "null" }
+      ]
+    },
+    "appRule": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "packageName", "displayName", "rules"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/text"
+        },
+        "packageName": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 300,
+          "pattern": "^[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+$"
+        },
+        "displayName": {
+          "$ref": "#/$defs/text"
+        },
+        "defaultEnabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "activityIncludes": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "rules": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/pageRule"
+          }
+        }
+      }
+    },
+    "pageRule": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["id", "transactionType", "amount"],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/text"
+        },
+        "transactionType": {
+          "enum": ["expense", "income"]
+        },
+        "requiredAnchors": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "anyAnchors": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "excludedAnchors": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "pageMatch": {
+          "oneOf": [
+            { "$ref": "#/$defs/pageMatch" },
+            { "type": "null" }
+          ]
+        },
+        "scope": {
+          "oneOf": [
+            { "$ref": "#/$defs/scope" },
+            { "type": "null" }
+          ]
+        },
+        "amount": {
+          "$ref": "#/$defs/amountRule"
+        },
+        "merchant": {
+          "oneOf": [
+            { "$ref": "#/$defs/fieldRule" },
+            { "type": "null" }
+          ]
+        },
+        "note": {
+          "oneOf": [
+            { "$ref": "#/$defs/fieldRule" },
+            { "type": "null" }
+          ]
+        },
+        "paymentMethod": {
+          "oneOf": [
+            { "$ref": "#/$defs/fieldRule" },
+            { "type": "null" }
+          ]
+        },
+        "transactionTime": {
+          "oneOf": [
+            { "$ref": "#/$defs/fieldRule" },
+            { "type": "null" }
+          ]
+        },
+        "orderId": {
+          "oneOf": [
+            { "$ref": "#/$defs/fieldRule" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["requiredAnchors"],
+          "properties": {
+            "requiredAnchors": {
+              "type": "array",
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["anyAnchors"],
+          "properties": {
+            "anyAnchors": {
+              "type": "array",
+              "minItems": 1
+            }
+          }
+        },
+        {
+          "required": ["pageMatch"],
+          "properties": {
+            "pageMatch": {
+              "type": "object",
+              "anyOf": [
+                {
+                  "required": ["all"],
+                  "properties": {
+                    "all": {
+                      "type": "array",
+                      "minItems": 1
+                    }
+                  }
+                },
+                {
+                  "required": ["any"],
+                  "properties": {
+                    "any": {
+                      "type": "array",
+                      "minItems": 1
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "pageMatch": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "all": {
+          "oneOf": [
+            { "$ref": "#/$defs/selectorList" },
+            { "type": "null" }
+          ]
+        },
+        "any": {
+          "oneOf": [
+            { "$ref": "#/$defs/selectorList" },
+            { "type": "null" }
+          ]
+        },
+        "none": {
+          "oneOf": [
+            { "$ref": "#/$defs/selectorList" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "selectorList": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "$ref": "#/$defs/nodeSelector"
+      }
+    },
+    "nodeSelector": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "textEquals": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "textContains": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "textRegexes": {
+          "$ref": "#/$defs/nullableRegexList"
+        },
+        "descriptionEquals": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "descriptionContains": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "descriptionRegexes": {
+          "$ref": "#/$defs/nullableRegexList"
+        },
+        "viewIdEquals": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "viewIdContains": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "viewIdRegexes": {
+          "$ref": "#/$defs/nullableRegexList"
+        },
+        "classNameEquals": {
+          "$ref": "#/$defs/nullableTextList"
+        }
+      },
+      "anyOf": [
+        { "required": ["textEquals"], "properties": { "textEquals": { "type": "array", "minItems": 1 } } },
+        { "required": ["textContains"], "properties": { "textContains": { "type": "array", "minItems": 1 } } },
+        { "required": ["textRegexes"], "properties": { "textRegexes": { "type": "array", "minItems": 1 } } },
+        { "required": ["descriptionEquals"], "properties": { "descriptionEquals": { "type": "array", "minItems": 1 } } },
+        { "required": ["descriptionContains"], "properties": { "descriptionContains": { "type": "array", "minItems": 1 } } },
+        { "required": ["descriptionRegexes"], "properties": { "descriptionRegexes": { "type": "array", "minItems": 1 } } },
+        { "required": ["viewIdEquals"], "properties": { "viewIdEquals": { "type": "array", "minItems": 1 } } },
+        { "required": ["viewIdContains"], "properties": { "viewIdContains": { "type": "array", "minItems": 1 } } },
+        { "required": ["viewIdRegexes"], "properties": { "viewIdRegexes": { "type": "array", "minItems": 1 } } },
+        { "required": ["classNameEquals"], "properties": { "classNameEquals": { "type": "array", "minItems": 1 } } }
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "anchor": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "ancestorLevels": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 20,
+          "default": 0
+        }
+      },
+      "anyOf": [
+        {
+          "required": ["selector"],
+          "properties": {
+            "selector": {
+              "$ref": "#/$defs/nodeSelector"
+            }
+          }
+        },
+        {
+          "required": ["anchor"],
+          "properties": {
+            "anchor": {
+              "$ref": "#/$defs/nodeSelector"
+            }
+          }
+        }
+      ]
+    },
+    "relativeNode": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["selector"],
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/nodeSelector"
+        },
+        "relativeTo": {
+          "oneOf": [
+            { "$ref": "#/$defs/nodeSelector" },
+            { "type": "null" }
+          ]
+        },
+        "relation": {
+          "oneOf": [
+            {
+              "enum": ["any", "self", "child", "descendant", "sibling", "followingSibling", "following", "ancestor"]
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*$"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": "any"
+        },
+        "requireUnique": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["relation"],
+            "properties": {
+              "relation": {
+                "enum": ["self", "child", "descendant", "sibling", "followingSibling", "following", "ancestor"]
+              }
+            }
+          },
+          "then": {
+            "required": ["relativeTo"],
+            "properties": {
+              "relativeTo": {
+                "$ref": "#/$defs/nodeSelector"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "amountRule": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["regexes"],
+      "properties": {
+        "labels": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "regexes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": {
+            "$ref": "#/$defs/regex"
+          }
+        },
+        "currencyLabels": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "standaloneRegex": {
+          "type": ["string", "null"],
+          "maxLength": 500
+        },
+        "maxAnchorDistancePx": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 5000,
+          "default": 1800
+        },
+        "maxCurrencyDistancePx": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 1000,
+          "default": 300
+        },
+        "node": {
+          "oneOf": [
+            { "$ref": "#/$defs/relativeNode" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "fieldRule": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "labels": {
+          "$ref": "#/$defs/nullableTextList"
+        },
+        "regexes": {
+          "$ref": "#/$defs/nullableRegexList"
+        },
+        "beforeAmountNodes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 0
+        },
+        "afterAmountNodes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 0
+        },
+        "fallbackToMerchant": {
+          "type": "boolean",
+          "default": false
+        },
+        "node": {
+          "oneOf": [
+            { "$ref": "#/$defs/relativeNode" },
+            { "type": "null" }
+          ]
+        }
+      }
+    }
+  }
+}

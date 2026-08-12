@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/PredatorMan/BeeCount-Accessibility-Rules/schema/ai-analysis.schema.json",
+  "title": "BeeCount GKD Snapshot AI Analysis",
+  "description": "AI 对单个已脱敏 GKD 快照的结构化分析结果；它不能代替人工复核。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "analysisVersion",
+    "snapshot",
+    "decision",
+    "page",
+    "amountCandidates",
+    "fieldCandidates",
+    "humanVerification"
+  ],
+  "properties": {
+    "analysisVersion": {
+      "const": 1
+    },
+    "snapshot": {
+      "$ref": "#/$defs/snapshot"
+    },
+    "decision": {
+      "$ref": "#/$defs/decision"
+    },
+    "page": {
+      "$ref": "#/$defs/page"
+    },
+    "amountCandidates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/amountCandidate"
+      }
+    },
+    "fieldCandidates": {
+      "$ref": "#/$defs/fieldCandidates"
+    },
+    "ruleDraft": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "rules-v2.schema.json#/$defs/pageRule"
+        }
+      ]
+    },
+    "humanVerification": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/verification"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "decision": {
+            "type": "object",
+            "properties": {
+              "status": {
+                "const": "ready_for_human_review"
+              }
+            },
+            "required": ["status"]
+          }
+        }
+      },
+      "then": {
+        "required": ["ruleDraft"],
+        "properties": {
+          "ruleDraft": {
+            "not": {
+              "type": "null"
+            }
+          }
+        }
+      },
+      "else": {
+        "required": ["ruleDraft"],
+        "properties": {
+          "ruleDraft": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "nonEmptyText": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "\\S"
+    },
+    "nodeId": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshotId", "packageName", "activity", "nodeCount"],
+      "properties": {
+        "snapshotId": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "packageName": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "activity": {
+          "type": ["string", "null"]
+        },
+        "appName": {
+          "type": ["string", "null"]
+        },
+        "versionName": {
+          "type": ["string", "null"]
+        },
+        "versionCode": {
+          "type": ["integer", "null"]
+        },
+        "nodeCount": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "confidence", "reasons"],
+      "properties": {
+        "status": {
+          "enum": ["ready_for_human_review", "needs_more_snapshots", "reject"]
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nonEmptyText"
+          }
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "transactionType", "isSingleTransaction", "evidenceNodeIds", "risks"],
+      "properties": {
+        "kind": {
+          "enum": ["payment_result", "transaction_detail", "multi_transaction_list", "payment_in_progress", "other", "unknown"]
+        },
+        "transactionType": {
+          "enum": ["expense", "income", "unknown"]
+        },
+        "isSingleTransaction": {
+          "type": "boolean"
+        },
+        "evidenceNodeIds": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nodeId"
+          }
+        },
+        "risks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyText"
+          }
+        }
+      }
+    },
+    "amountCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeId", "value", "role", "evidence"],
+      "properties": {
+        "nodeId": {
+          "$ref": "#/$defs/nodeId"
+        },
+        "value": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "role": {
+          "enum": ["transaction_total", "item_price", "discount", "refund", "historical_order", "unknown"]
+        },
+        "evidence": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "fieldCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodeIds", "value", "evidence"],
+      "properties": {
+        "nodeIds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/nodeId"
+          }
+        },
+        "value": {
+          "type": ["string", "null"]
+        },
+        "evidence": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "fieldCandidates": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "merchant": {
+          "$ref": "#/$defs/fieldCandidate"
+        },
+        "note": {
+          "$ref": "#/$defs/fieldCandidate"
+        },
+        "paymentMethod": {
+          "$ref": "#/$defs/fieldCandidate"
+        },
+        "transactionTime": {
+          "$ref": "#/$defs/fieldCandidate"
+        },
+        "orderId": {
+          "$ref": "#/$defs/fieldCandidate"
+        }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["item", "status", "details"],
+      "properties": {
+        "item": {
+          "enum": ["page_identity", "single_transaction", "transaction_type", "amount", "container_scope", "merchant", "note", "negative_pages", "app_versions", "privacy"]
+        },
+        "status": {
+          "enum": ["pass", "fail", "unknown"]
+        },
+        "details": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    }
+  }
+}
