@@ -1,15 +1,15 @@
 {
   "schemaVersion": 2,
-  "rulesVersion": 5,
+  "rulesVersion": 7,
   "apps": [
     {
       "id": "wechat",
-      "source": "apps/wechat.json",
+      "source": "apps/wechat/app.json",
       "description": "微信支付结果与账单详情"
     },
     {
       "id": "alipay",
-      "source": "apps/alipay.json",
+      "source": "apps/alipay/app.json",
       "description": "支付宝支付结果与账单详情"
     }
   ]

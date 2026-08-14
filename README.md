@@ -8,9 +8,9 @@
 
 ```text
 manifest.json                      规则版本与 App 总索引，决定发布顺序
-apps/wechat.json                   微信的独立源规则
-apps/alipay.json                   支付宝的独立源规则
-rules.json                         确定性生成的发布产物，BeeCount 实际下载
+apps/<app-id>/app.json             单个 App 的元数据和页面规则索引
+apps/<app-id>/rules/*.json         每个文件只描述一个页面规则及其理解
+rules.json                         确定性生成的干净发布产物，BeeCount 实际下载
 schema/rules-v2.schema.json        Android 运行时 Schema v2 的静态结构约束
 schema/ai-analysis.schema.json     AI 快照分析结果格式
 prompts/analyze-gkd-snapshot.md    固定的 AI 分析提示词
@@ -21,16 +21,16 @@ tool/sanitize_snapshot.dart        单独脱敏 JSON 的辅助工具
 snapshots-local/                   本地分析工作区，已被 Git 忽略
 ```
 
-`manifest.json` 和 `apps/*.json` 是需要人工维护的源文件。`rules.json` 是兼容 BeeCount 固定下载地址的构建产物，禁止直接手工修改。构建器严格按 `manifest.json` 的顺序合并，因此不同机器会得到完全相同的 UTF-8 JSON；CI 会拒绝源文件和发布产物不一致的提交。
+`manifest.json`、`apps/<app-id>/app.json` 和 `apps/<app-id>/rules/*.json` 是需要人工维护的源文件。每个页面规则源文件包含给维护者阅读的 `description`、`understanding` 和真正下发的 `rule`；构建时只把 `rule` 合并进发布产物。`rules.json` 是兼容 BeeCount 固定下载地址的构建产物，禁止直接手工修改，其中不会出现注释、理解或源路径等维护信息。构建器严格按索引顺序合并，因此不同机器会得到完全相同的 UTF-8 JSON；CI 会拒绝源文件和发布产物不一致的提交。
 
 ## 当前适配 App
 
-| App | 包名 | 源规则 | 默认状态 |
-| --- | --- | --- | --- |
-| 微信 | `com.tencent.mm` | `apps/wechat.json` | 开启 |
-| 支付宝 | `com.eg.android.AlipayGphone` | `apps/alipay.json` | 开启 |
+| App | 包名 | App 元数据 | 页面规则 | 默认状态 |
+| --- | --- | --- | --- | --- |
+| 微信 | `com.tencent.mm` | `apps/wechat/app.json` | 账单详情支出、账单详情收入、支付结果支出 | 开启 |
+| 支付宝 | `com.eg.android.AlipayGphone` | `apps/alipay/app.json` | 历史账单支出、历史账单收入、成功账单支出、成功账单收入、支付结果支出 | 开启 |
 
-这个表用于快速了解线上能力，实际可下载内容以 `manifest.json`、`apps/*.json` 合并后的 `rules.json` 为准。当前没有淘宝正向规则。
+这个表是当前已适配 App 的总说明，具体页面文件以各 App 的 `app.json` 中 `ruleSources` 顺序为准，实际可下载内容以构建后的 `rules.json` 为准。当前没有淘宝正向规则。
 
 ## 完整适配流程
 
@@ -134,20 +134,22 @@ AI 输出是候选材料，不是已验证规则。AI 不能替代真机验证�
 
 ### 6. 添加 App 和页面规则
 
-不要编辑根目录的 `rules.json`。每个 App 只维护一个独立源文件：
+不要编辑根目录的 `rules.json`。源文件按 App 和页面分层维护：
 
-- 已存在 App：打开 `apps/<app-id>.json`，把审核后的页面规则加入它的 `rules` 数组；
-- 新 App：新建 `apps/<app-id>.json`，内容是一个完整 App 对象，并将 `defaultEnabled` 明确设为 `false`；
-- 把新 App 加入 `manifest.json` 的 `apps` 数组，`id` 必须和源文件里的 App `id` 相同，`source` 使用直接路径 `apps/<app-id>.json`；
+- 已存在 App：在 `apps/<app-id>/rules/` 新建一个语义明确的页面 JSON，再把 `rules/<page-name>.json` 加到该 App 的 `app.json` 中；
+- 一个页面源文件只能包含一条规则，禁止把多个页面重新合并到同一个 JSON；
+- `app.json` 的 `ruleSources` 顺序就是运行时尝试规则的顺序。更具体、更安全的规则应排在宽泛规则之前；
+- 新 App：新建 `apps/<app-id>/app.json` 和 `apps/<app-id>/rules/`，并将 `defaultEnabled` 明确设为 `false`；
+- 把新 App 加入 `manifest.json` 的 `apps` 数组，`id` 必须和元数据里的 App `id` 相同，`source` 必须是 `apps/<app-id>/app.json`；
 - 按希望在 BeeCount 中展示的顺序排列 `manifest.json` 条目；构建器按此顺序生成发布文件；
 - `packageName` 必须唯一，App `id` 必须唯一，同一 App 内页面规则 `id` 必须唯一；
 - `activityIncludes` 为空表示不限制 Activity；设置后使用的是大小写不敏感的“包含”判断，应避免写过短的片段；
 - `pageCandidateAnchors` 用于慢加载三态判断：出现任一候选锚点但完整交易规则尚未匹配时，BeeCount 返回 `UNKNOWN` 并继续监测；候选锚点本身绝不会触发弹窗；
-- 每个 App 最多 20 条页面规则，整个文件最多 50 个 App。
+- 每个 App 最多 20 条页面规则，整个发布文件最多 50 个 App。
 
-构建器会拒绝重复索引、越过 `apps/` 的路径、索引 ID 与文件 ID 不一致，以及存在于 `apps/` 但未登记到清单的 JSON，避免规则静默漏发。
+构建器会拒绝重复索引、越过约定目录的路径、索引 ID 与元数据 ID 不一致、没有说明的页面规则，以及存在于 `apps/` 但未被引用的 JSON，避免规则静默漏发。
 
-新 App 元数据片段如下。发布对象还必须包含至少一条已经审核的 `rules` 页面规则：
+新 App 的 `apps/example_pay/app.json` 示例：
 
 ```json
 {
@@ -156,9 +158,38 @@ AI 输出是候选材料，不是已验证规则。AI 不能替代真机验证�
   "displayName": "示例支付",
   "defaultEnabled": false,
   "activityIncludes": ["PaymentResultActivity"],
-  "pageCandidateAnchors": ["账单详情", "交易详情"]
+  "pageCandidateAnchors": ["账单详情", "交易详情"],
+  "description": "示例支付的单笔交易详情适配",
+  "ruleSources": [
+    "rules/payment_result_expense.json"
+  ]
 }
 ```
+
+对应的 `apps/example_pay/rules/payment_result_expense.json` 示例：
+
+```json
+{
+  "description": "示例支付完成页支出",
+  "understanding": [
+    "只匹配明确显示支付成功的单笔结果页。",
+    "等待付款、处理中或退款页面必须由 excludedAnchors 排除。",
+    "金额节点必须能唯一归属于当前交易。"
+  ],
+  "rule": {
+    "id": "example_pay_payment_result_expense_v1",
+    "transactionType": "expense",
+    "requiredAnchors": [],
+    "anyAnchors": ["支付成功"],
+    "excludedAnchors": ["等待付款", "处理中", "退款中"],
+    "amount": {
+      "regexes": ["[¥￥]\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)"]
+    }
+  }
+}
+```
+
+`description` 用一句话说明页面和交易方向；`understanding` 记录正向证据、金额/字段提取依据和必须排除的相似页面。这两个字段只帮助人工或 AI 继续维护，不会进入 App 下载的 `rules.json`。
 
 页面规则的核心能力：
 
@@ -171,6 +202,8 @@ AI 输出是候选材料，不是已验证规则。AI 不能替代真机验证�
 - `scope.anchor` + `ancestorLevels`：从唯一锚点向上找到容器；
 - 字段 `node.selector` + `relativeTo` + `relation`：按节点关系提取值；
 - `requireUnique`：默认为 `true`，候选不唯一时拒绝识别。
+
+支付宝历史账单详情与刚完成支付的结果页是两种不同结构。历史账单规则使用“账单详情”标题、支付/收款时间字段和完整的“支出/收入 + 金额”节点共同确认，不要求页面继续保留“支付成功”或“交易成功”文案。待支付、失败、取消、关闭和退款状态仍必须放入 `excludedAnchors`；“等待确认收货”表示订单已付款，不能作为排除项。
 
 无 `node` 的旧式字段规则仍可使用标签、正则和金额前后节点范围，但新规则应优先选择唯一容器和相对节点，降低列表页误判。
 
@@ -206,7 +239,9 @@ BeeCount 只接受比设备当前活动规则更新的版本；同版本但内�
 发布前最后确认：
 
 - `rules.json` 是有效 UTF-8 JSON，大小不超过 512 KiB；
-- `manifest.json` 中每个 App 都有且只有一个对应的 `apps/*.json`；
+- `manifest.json` 中每个 App 都有且只有一个对应的 `apps/<app-id>/app.json`；
+- 每个页面规则都是独立 JSON，且已在对应 `app.json` 的 `ruleSources` 中登记；
+- 每条源规则都有 `description` 和非空 `understanding`，生成的 `rules.json` 不包含这些维护字段；
 - `dart run tool/build_rules.dart --check` 通过，发布产物没有漂移；
 - `schemaVersion` 为 `2`，`rulesVersion` 已递增；
 - 新 App 的 `defaultEnabled` 为 `false`；

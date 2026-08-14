@@ -1,0 +1,20 @@
+{
+  "id": "wechat",
+  "packageName": "com.tencent.mm",
+  "displayName": "微信",
+  "defaultEnabled": true,
+  "activityIncludes": [],
+  "pageCandidateAnchors": [
+    "账单详情",
+    "交易详情",
+    "支付时间",
+    "支付方式",
+    "商户"
+  ],
+  "description": "微信支付结果与单笔账单详情适配",
+  "ruleSources": [
+    "rules/bill_detail_expense.json",
+    "rules/bill_detail_income.json",
+    "rules/payment_result_expense.json"
+  ]
+}

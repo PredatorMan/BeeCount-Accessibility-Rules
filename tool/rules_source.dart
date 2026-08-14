@@ -12,6 +12,10 @@ class RulesSourceResult {
   final Map<String, Object?> document;
   final List<String> sourcePaths;
 
+  int get appCount => (document['apps'] as List<Object?>).length;
+
+  int get pageRuleCount => sourcePaths.length - appCount;
+
   String encode() =>
       '${const JsonEncoder.withIndent('  ').convert(document)}\n';
 }
@@ -46,10 +50,16 @@ class RulesSourceLoader {
       if (!appIds.add(id)) {
         throw FormatException('$path.id duplicate app id: $id');
       }
-      final source = _text(entry, 'source', path).replaceAll('\\', '/');
-      if (!RegExp(r'^apps/[a-z0-9][a-z0-9_-]*\.json$').hasMatch(source)) {
+      if (!RegExp(r'^[a-z0-9][a-z0-9_-]*$').hasMatch(id)) {
         throw FormatException(
-          '$path.source must be a direct apps/*.json path using a safe name',
+          '$path.id must use lowercase letters, digits, hyphens, or underscores',
+        );
+      }
+      final source = _text(entry, 'source', path).replaceAll('\\', '/');
+      final expectedSource = 'apps/$id/app.json';
+      if (source != expectedSource) {
+        throw FormatException(
+          '$path.source must be $expectedSource',
         );
       }
       if (sourcePaths.contains(source)) {
@@ -64,20 +74,106 @@ class RulesSourceLoader {
       if (!appFile.existsSync()) {
         throw FormatException('$path.source does not exist: $source');
       }
-      final app = _object(
+      final appSource = _object(
         jsonDecode(appFile.readAsStringSync()),
         source,
       );
-      if (app['id'] != id) {
+      _onlyKeys(
+        appSource,
+        {
+          'id',
+          'packageName',
+          'displayName',
+          'defaultEnabled',
+          'activityIncludes',
+          'pageCandidateAnchors',
+          'description',
+          'ruleSources',
+        },
+        source,
+      );
+      if (appSource['id'] != id) {
         throw FormatException(
           '$source.id must match manifest id "$id"',
         );
       }
+      _text(appSource, 'description', source);
+      final ruleEntries = _list(appSource, 'ruleSources', source);
+      if (ruleEntries.isEmpty) {
+        throw FormatException('$source.ruleSources must not be empty');
+      }
+
+      final appDirectory = appFile.parent;
+      final ruleSourcePaths = <String>[];
+      final rules = <Object?>[];
+      for (var ruleIndex = 0; ruleIndex < ruleEntries.length; ruleIndex++) {
+        final rulePath = '$source.ruleSources[$ruleIndex]';
+        final relativeRuleSource = _validatedText(
+          ruleEntries[ruleIndex],
+          rulePath,
+        ).replaceAll('\\', '/');
+        if (!RegExp(r'^rules/[a-z0-9][a-z0-9_-]*\.json$')
+            .hasMatch(relativeRuleSource)) {
+          throw FormatException(
+            '$rulePath must be a direct rules/*.json path using a safe name',
+          );
+        }
+        final fullRuleSource = 'apps/$id/$relativeRuleSource';
+        if (sourcePaths.contains(fullRuleSource) ||
+            ruleSourcePaths.contains(fullRuleSource)) {
+          throw FormatException(
+              '$rulePath duplicate source: $relativeRuleSource');
+        }
+        final ruleFile = File(
+          '${appDirectory.path}${Platform.pathSeparator}'
+          '${relativeRuleSource.replaceAll('/', Platform.pathSeparator)}',
+        );
+        if (!ruleFile.existsSync()) {
+          throw FormatException('$rulePath does not exist: $fullRuleSource');
+        }
+        final ruleSource = _object(
+          jsonDecode(ruleFile.readAsStringSync()),
+          fullRuleSource,
+        );
+        _onlyKeys(
+          ruleSource,
+          {'description', 'understanding', 'rule'},
+          fullRuleSource,
+        );
+        _text(ruleSource, 'description', fullRuleSource);
+        final understanding =
+            _list(ruleSource, 'understanding', fullRuleSource);
+        if (understanding.isEmpty) {
+          throw FormatException(
+            '$fullRuleSource.understanding must not be empty',
+          );
+        }
+        for (var noteIndex = 0; noteIndex < understanding.length; noteIndex++) {
+          _validatedText(
+            understanding[noteIndex],
+            '$fullRuleSource.understanding[$noteIndex]',
+          );
+        }
+        rules.add(_object(ruleSource['rule'], '$fullRuleSource.rule'));
+        ruleSourcePaths.add(fullRuleSource);
+      }
+
+      final app = <String, Object?>{
+        'id': appSource['id'],
+        'packageName': appSource['packageName'],
+        'displayName': appSource['displayName'],
+        'defaultEnabled': appSource['defaultEnabled'],
+        'activityIncludes': appSource['activityIncludes'],
+        if (appSource.containsKey('pageCandidateAnchors'))
+          'pageCandidateAnchors': appSource['pageCandidateAnchors'],
+        'rules': rules,
+      };
       sourcePaths.add(source);
+      sourcePaths.addAll(ruleSourcePaths);
       apps.add(app);
     }
 
-    _rejectUnlistedAppFiles(rootDirectory, sourcePaths);
+    _rejectUnlistedSourceFiles(rootDirectory, sourcePaths);
     final document = <String, Object?>{
       'schemaVersion': schemaVersion,
       'rulesVersion': rulesVersion,
@@ -87,21 +183,25 @@ class RulesSourceLoader {
     return RulesSourceResult(document: document, sourcePaths: sourcePaths);
   }
 
-  void _rejectUnlistedAppFiles(Directory root, List<String> listed) {
+  void _rejectUnlistedSourceFiles(Directory root, List<String> listed) {
     final appsDirectory = Directory(
       '${root.path}${Platform.pathSeparator}apps',
     );
     if (!appsDirectory.existsSync()) return;
     final actual = appsDirectory
-        .listSync(followLinks: false)
+        .listSync(recursive: true, followLinks: false)
         .whereType<File>()
         .where((file) => file.path.toLowerCase().endsWith('.json'))
-        .map((file) => 'apps/${file.uri.pathSegments.last}')
-        .toSet();
+        .map((file) {
+      final relative = file.absolute.path
+          .substring(root.absolute.path.length + 1)
+          .replaceAll('\\', '/');
+      return relative;
+    }).toSet();
     final unlisted = actual.difference(listed.toSet()).toList()..sort();
     if (unlisted.isNotEmpty) {
       throw FormatException(
-        'App source files are missing from manifest.json: ${unlisted.join(', ')}',
+        'Source files are not referenced by app metadata: ${unlisted.join(', ')}',
       );
     }
   }
@@ -126,9 +226,13 @@ class RulesSourceLoader {
   }
 
   String _text(Map<String, Object?> value, String key, String path) {
-    final result = value[key];
+    return _validatedText(value[key], '$path.$key');
+  }
+
+  String _validatedText(Object? value, String path) {
+    final result = value;
     if (result is! String || result.trim().isEmpty) {
-      throw FormatException('$path.$key must be a non-empty string');
+      throw FormatException('$path must be a non-empty string');
     }
     return result.trim();
   }

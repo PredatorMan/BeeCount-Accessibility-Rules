@@ -12,8 +12,24 @@ void main() {
     final expected = File('rules.json').readAsStringSync();
     final result = RulesSourceLoader().load();
 
-    expect(result.sourcePaths, ['apps/wechat.json', 'apps/alipay.json']);
+    expect(result.sourcePaths, [
+      'apps/wechat/app.json',
+      'apps/wechat/rules/bill_detail_expense.json',
+      'apps/wechat/rules/bill_detail_income.json',
+      'apps/wechat/rules/payment_result_expense.json',
+      'apps/alipay/app.json',
+      'apps/alipay/rules/historical_bill_expense.json',
+      'apps/alipay/rules/historical_bill_income.json',
+      'apps/alipay/rules/bill_detail_expense.json',
+      'apps/alipay/rules/bill_detail_income.json',
+      'apps/alipay/rules/payment_result_expense.json',
+    ]);
+    expect(result.appCount, 2);
+    expect(result.pageRuleCount, 8);
     expect(result.encode(), expected);
+    expect(expected, isNot(contains('"description":')));
+    expect(expected, isNot(contains('"understanding"')));
+    expect(expected, isNot(contains('"ruleSources"')));
   });
 
   setUp(() {
@@ -39,7 +55,7 @@ void main() {
     expect(result.encode(), result.encode());
   });
 
-  test('rejects an app file not listed by the manifest', () {
+  test('rejects a source file not listed by app metadata', () {
     _writeApp(temporary, 'listed', 'com.example.listed');
     _writeApp(temporary, 'forgotten', 'com.example.forgotten');
     _writeManifest(temporary, ['listed']);
@@ -58,9 +74,42 @@ void main() {
       'schemaVersion': 2,
       'rulesVersion': 1,
       'apps': [
-        {'id': 'listed', 'source': '../listed.json'},
+        {'id': 'listed', 'source': '../listed/app.json'},
       ],
     }));
+
+    expect(
+      () => RulesSourceLoader().load(
+        manifestPath: '${temporary.path}/manifest.json',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('rejects unsafe rule source paths', () {
+    _writeApp(temporary, 'listed', 'com.example.listed');
+    final appFile = File('${temporary.path}/apps/listed/app.json');
+    final app = jsonDecode(appFile.readAsStringSync()) as Map;
+    app['ruleSources'] = ['../listed_detail.json'];
+    appFile.writeAsStringSync(jsonEncode(app));
+    _writeManifest(temporary, ['listed']);
+
+    expect(
+      () => RulesSourceLoader().load(
+        manifestPath: '${temporary.path}/manifest.json',
+      ),
+      throwsA(isA<FormatException>()),
+    );
+  });
+
+  test('requires human-readable understanding for every page rule', () {
+    _writeApp(temporary, 'listed', 'com.example.listed');
+    final ruleFile =
+        File('${temporary.path}/apps/listed/rules/order_detail.json');
+    final source = jsonDecode(ruleFile.readAsStringSync()) as Map;
+    source['understanding'] = <Object?>[];
+    ruleFile.writeAsStringSync(jsonEncode(source));
+    _writeManifest(temporary, ['listed']);
 
     expect(
       () => RulesSourceLoader().load(
@@ -76,29 +125,36 @@ void _writeManifest(Directory root, List<String> ids) {
     'schemaVersion': 2,
     'rulesVersion': 1,
     'apps': [
-      for (final id in ids) {'id': id, 'source': 'apps/$id.json'},
+      for (final id in ids) {'id': id, 'source': 'apps/$id/app.json'},
     ],
   }));
 }
 
 void _writeApp(Directory root, String id, String packageName) {
-  File('${root.path}/apps/$id.json').writeAsStringSync(jsonEncode({
+  final appDirectory = Directory('${root.path}/apps/$id')..createSync();
+  final rulesDirectory = Directory('${appDirectory.path}/rules')..createSync();
+  File('${appDirectory.path}/app.json').writeAsStringSync(jsonEncode({
     'id': id,
     'packageName': packageName,
     'displayName': id,
     'defaultEnabled': false,
     'activityIncludes': <Object?>[],
-    'rules': [
-      {
-        'id': '${id}_detail',
-        'transactionType': 'expense',
-        'requiredAnchors': ['支付成功'],
-        'anyAnchors': <Object?>[],
-        'excludedAnchors': <Object?>[],
-        'amount': {
-          'regexes': [r'¥\s*([0-9]{1,7}(?:\.[0-9]{1,2})?)'],
-        },
+    'description': '$id test app',
+    'ruleSources': ['rules/order_detail.json'],
+  }));
+  File('${rulesDirectory.path}/order_detail.json')
+      .writeAsStringSync(jsonEncode({
+    'description': '$id order detail',
+    'understanding': ['Matches a completed order detail page.'],
+    'rule': {
+      'id': '${id}_detail',
+      'transactionType': 'expense',
+      'requiredAnchors': ['支付成功'],
+      'anyAnchors': <Object?>[],
+      'excludedAnchors': <Object?>[],
+      'amount': {
+        'regexes': [r'¥\s*([0-9]{1,7}(?:\.[0-9]{1,2})?)'],
       },
-    ],
+    },
   }));
 }

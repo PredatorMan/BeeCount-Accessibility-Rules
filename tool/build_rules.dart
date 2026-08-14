@@ -30,14 +30,16 @@ void main(List<String> arguments) {
         );
       }
       stdout.writeln(
-        'Rules are up to date: ${result.sourcePaths.length} app sources -> $outputPath',
+        'Rules are up to date: ${result.appCount} apps / '
+        '${result.pageRuleCount} page rules -> $outputPath',
       );
       return;
     }
 
     output.writeAsStringSync(generated);
     stdout.writeln(
-      'Built ${result.sourcePaths.length} app sources -> $outputPath',
+      'Built ${result.appCount} apps / '
+      '${result.pageRuleCount} page rules -> $outputPath',
     );
   } on Object catch (error) {
     stderr.writeln('Build failed: $error');

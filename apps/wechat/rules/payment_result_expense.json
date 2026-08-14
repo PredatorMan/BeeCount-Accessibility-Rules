@@ -1,0 +1,75 @@
+{
+  "description": "微信支付完成结果页支出",
+  "understanding": [
+    "用于刚完成微信支付后出现“支付成功”或“付款成功”的结果页。",
+    "该页面不要求“当前状态”标题，因此排在账单详情规则之后单独维护。",
+    "从金额附近提取商户和备注，并在页面提供时读取付款方式、交易时间和订单号。"
+  ],
+  "rule": {
+    "id": "wechat_payment_result_expense_v2",
+    "transactionType": "expense",
+    "requiredAnchors": [],
+    "anyAnchors": [
+      "支付成功",
+      "付款成功"
+    ],
+    "excludedAnchors": [],
+    "amount": {
+      "labels": [
+        "金额",
+        "支付金额",
+        "付款金额"
+      ],
+      "regexes": [
+        "[¥￥]\\s*([0-9]{1,7}(?:\\.[0-9]{1,2})?)",
+        "([0-9]{1,7}(?:\\.[0-9]{1,2})?)\\s*元"
+      ],
+      "currencyLabels": [
+        "¥",
+        "￥",
+        "人民币"
+      ],
+      "standaloneRegex": "([0-9]{1,7}(?:\\.[0-9]{1,2})?)"
+    },
+    "merchant": {
+      "labels": [
+        "商户",
+        "商家",
+        "收款方",
+        "收款人",
+        "交易对象"
+      ],
+      "beforeAmountNodes": 4
+    },
+    "note": {
+      "labels": [
+        "商品说明",
+        "收款方备注",
+        "付款说明",
+        "备注"
+      ],
+      "fallbackToMerchant": true
+    },
+    "paymentMethod": {
+      "labels": [
+        "付款方式",
+        "支付方式",
+        "扣款方式"
+      ]
+    },
+    "transactionTime": {
+      "labels": [
+        "支付时间",
+        "付款时间",
+        "交易时间"
+      ]
+    },
+    "orderId": {
+      "labels": [
+        "订单号",
+        "交易号",
+        "商户单号"
+      ]
+    }
+  }
+}
